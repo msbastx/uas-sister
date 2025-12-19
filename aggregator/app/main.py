@@ -1,15 +1,10 @@
 from fastapi import FastAPI
-from .models import Event
-from .redis_queue import enqueue
-from .consumer import worker
-import asyncio
+from app.redis_queue import enqueue
+from app.models import Event
+from app.db import get_db
 
 app = FastAPI()
 
-@app.on_event("startup")
-async def startup():
-    asyncio.create_task(worker())
-    asyncio.create_task(worker())  # multi-worker
 
 @app.post("/publish")
 async def publish(events: list[Event]):
@@ -17,9 +12,11 @@ async def publish(events: list[Event]):
         enqueue(e.dict())
     return {"status": "accepted", "count": len(events)}
 
+
 @app.get("/stats")
 async def stats():
-    from .db import get_db
     db = await get_db()
-    row = await db.fetchrow("SELECT * FROM stats")
+    row = await db.fetchrow(
+        "SELECT received, unique_processed, duplicate_dropped FROM stats"
+    )
     return dict(row)
